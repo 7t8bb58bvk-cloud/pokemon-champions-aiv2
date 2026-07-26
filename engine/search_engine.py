@@ -1,139 +1,88 @@
 
 from copy import deepcopy
 
+from battle.action import Action
+from battle.action import ACTION_MOVE
+from battle.action import ACTION_SWITCH
+
 from engine.turn_engine import TurnEngine
 from engine.evaluation_engine import EvaluationEngine
-
-
-class DummyAction:
-    action_type = "move"
-    priority = 0
-
-    def __init__(self, move):
-        self.move = move
 
 
 class SearchEngine:
 
     @staticmethod
-    def _terminal_score(player, opponent):
-        if player.current_hp <= 0 and opponent.current_hp <= 0:
-            return 0
+    def generate_actions(side):
 
-        if opponent.current_hp <= 0:
-            return 10**6
+        actions = []
 
-        if player.current_hp <= 0:
-            return -10**6
+        # 技
+        for move in side.active.moves:
+            actions.append(
+                Action(
+                    action_type=ACTION_MOVE,
+                    move=move,
+                )
+            )
 
-        return EvaluationEngine.evaluate(player, opponent)
+        # 交代
+        for i, pokemon in enumerate(side.team):
+
+            if pokemon is side.active:
+                continue
+
+            if pokemon.current_hp <= 0:
+                continue
+
+            actions.append(
+                Action(
+                    action_type=ACTION_SWITCH,
+                    switch_index=i,
+                )
+            )
+
+        return actions
 
     @staticmethod
-    def minimax(player, opponent, depth, maximizing, alpha=-10**9, beta=10**9):
+    def choose_best_action(player_side, opponent_side):
 
-        if depth == 0 or player.current_hp <= 0 or opponent.current_hp <= 0:
-            return SearchEngine._terminal_score(player, opponent)
+        best_action = None
+        best_score = -999999
 
-        if maximizing:
-            value = -10**9
-            moves = player.moves or []
+        actions = SearchEngine.generate_actions(player_side)
 
-            if not moves:
-                return SearchEngine._terminal_score(player, opponent)
+        for action in actions:
 
-            for move in moves:
-                sim_player = deepcopy(player)
-                sim_opponent = deepcopy(opponent)
+            sim_player = deepcopy(player_side)
+            sim_opponent = deepcopy(opponent_side)
+
+            if action.action_type == ACTION_SWITCH:
+
+                sim_player.switch(
+                    action.switch_index,
+                )
+
+            else:
 
                 TurnEngine.execute_move(
-                    sim_player,
-                    sim_opponent,
-                    DummyAction(move),
+                    sim_player.active,
+                    sim_opponent.active,
+                    action,
                 )
 
-                score = SearchEngine.minimax(
-                    sim_player,
-                    sim_opponent,
-                    depth - 1,
-                    False,
-                    alpha,
-                    beta,
-                )
-
-                value = max(value, score)
-                alpha = max(alpha, value)
-
-                if beta <= alpha:
-                    break
-
-            return value
-
-        value = 10**9
-        moves = opponent.moves or []
-
-        if not moves:
-            return SearchEngine._terminal_score(player, opponent)
-
-        for move in moves:
-            sim_player = deepcopy(player)
-            sim_opponent = deepcopy(opponent)
-
-            TurnEngine.execute_move(
-                sim_opponent,
-                sim_player,
-                DummyAction(move),
-            )
-
-            score = SearchEngine.minimax(
-                sim_player,
-                sim_opponent,
-                depth - 1,
-                True,
-                alpha,
-                beta,
-            )
-
-            value = min(value, score)
-            beta = min(beta, value)
-
-            if beta <= alpha:
-                break
-
-        return value
-
-    @staticmethod
-    def choose_best_move(player, opponent, depth=2):
-
-        best_move = None
-        best_score = -10**9
-
-        moves = player.moves or []
-
-        for move in moves:
-            sim_player = deepcopy(player)
-            sim_opponent = deepcopy(opponent)
-
-            TurnEngine.execute_move(
-                sim_player,
-                sim_opponent,
-                DummyAction(move),
-            )
-
-            score = SearchEngine.minimax(
-                sim_player,
-                sim_opponent,
-                depth - 1,
-                False,
+            score = EvaluationEngine.evaluate(
+                sim_player.active,
+                sim_opponent.active,
             )
 
             if score > best_score:
                 best_score = score
-                best_move = move
+                best_action = action
 
         return {
-            "move": best_move,
+            "action": best_action,
             "score": best_score,
         }
 
 
-print("✅ search_engine.py V7 Ready")
+print("✅ search_engine.py V9 Ready")
